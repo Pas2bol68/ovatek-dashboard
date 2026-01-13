@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Incubateur Connecté - Dashboard Firebase</title>
+
+    <!-- Bibliothèques -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+
+    <style>
+      .pulse-red {
+        animation: pulse-red 2s infinite;
+      }
+      @keyframes pulse-red {
+        0% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+      }
+    </style>
+  </head>
+  <body class="bg-slate-100 text-slate-800">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md p-4 mb-6 sticky top-0 z-50">
+      <div class="max-w-6xl mx-auto flex justify-between items-center">
+        <div class="flex items-center gap-3">
+          <i class="fa-solid fa-egg text-yellow-500 text-2xl"></i>
+          <h1 class="text-xl font-bold text-slate-800">Incubateur Firebase</h1>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-sm text-slate-500 flex items-center">
+            <span
+              id="firebase-status"
+              class="inline-block w-2 h-2 rounded-full bg-red-500 mr-2"
+            ></span>
+            <span id="status-text">Déconnecté</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 pb-10">
+      <!-- Alerte Banner -->
+      <div
+        id="alert-banner"
+        class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6 rounded shadow-md"
+        role="alert"
+      >
+        <p class="font-bold">
+          <i class="fa-solid fa-triangle-exclamation mr-2"></i>ALERTE CRITIQUE
+        </p>
+        <p>Surchauffe détectée (> 39°C) ! Vérifiez l'incubateur.</p>
+      </div>
+
+      <!-- Indicateurs Temps Réel -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Température -->
+        <div
+          class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-400"
+        >
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <p class="text-slate-500 text-sm font-medium">Température</p>
+              <h2 class="text-3xl font-bold mt-1" id="temp-val">--.-°C</h2>
+            </div>
+            <div class="bg-red-50 p-3 rounded-full text-red-500">
+              <i class="fa-solid fa-temperature-half text-xl"></i>
+            </div>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+            <div
+              id="temp-bar"
+              class="bg-red-400 h-2.5 rounded-full"
+              style="width: 0%"
+            ></div>
+          </div>
+          <p class="text-xs text-slate-400">Cible: 37.5°C (±0.2)</p>
+        </div>
+
+        <!-- Humidité -->
+        <div
+          class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-400"
+        >
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <p class="text-slate-500 text-sm font-medium">Humidité</p>
+              <h2 class="text-3xl font-bold mt-1" id="hum-val">--%</h2>
+            </div>
+            <div class="bg-blue-50 p-3 rounded-full text-blue-500">
+              <i class="fa-solid fa-droplet text-xl"></i>
+            </div>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+            <div
+              id="hum-bar"
+              class="bg-blue-400 h-2.5 rounded-full"
+              style="width: 0%"
+            ></div>
+          </div>
+          <p class="text-xs text-slate-400">Cible: 50% (±1)</p>
+        </div>
+
+        <!-- Progression (Calculée JS) -->
+        <div
+          class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-400"
+        >
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <p class="text-slate-500 text-sm font-medium">Incubation</p>
+              <h2 class="text-3xl font-bold mt-1" id="jour-val">Jour 1</h2>
+            </div>
+            <div class="bg-yellow-50 p-3 rounded-full text-yellow-500">
+              <i class="fa-regular fa-calendar-check text-xl"></i>
+            </div>
+          </div>
+          <p class="text-sm text-slate-600">sur 21 jours</p>
+          <p class="text-xs text-slate-400 mt-1" id="date-eclosion">
+            Calcul en cours...
+          </p>
+        </div>
+
+        <!-- État Actionneurs -->
+        <div
+          class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-400"
+        >
+          <p class="text-slate-500 text-sm font-medium mb-3">Système</p>
+          <div class="space-y-2">
+            <div class="flex justify-between items-center">
+              <span class="text-sm"
+                ><i class="fa-solid fa-fire text-red-400 w-6"></i
+                >Chauffage</span
+              >
+              <span
+                id="heat-status"
+                class="px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-500"
+                >OFF</span
+              >
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm"
+                ><i class="fa-solid fa-wind text-blue-400 w-6"></i
+                >Ventilation</span
+              >
+              <span
+                id="fan-status"
+                class="px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-500"
+                >ECO</span
+              >
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-sm"
+                ><i class="fa-solid fa-rotate text-purple-400 w-6"></i
+                >Rotation</span
+              >
+              <span
+                id="rot-status"
+                class="px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-500"
+                >--</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Zone Graphique & Historique -->
+      <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-slate-700">
+            Historique (60 dernières minutes)
+          </h3>
+          <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"
+            >Mise à jour Live</span
+          >
+        </div>
+        <div class="w-full h-[300px]">
+          <canvas id="historyChart"></canvas>
+        </div>
+      </div>
+    </main>
+
+    <!-- Configuration Firebase et Scripts -->
+    <script type="module">
+      // Importation des fonctions Firebase
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+      import {
+        getDatabase,
+        ref,
+        onValue,
+        query,
+        limitToLast,
+        onChildAdded,
+      } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+
+      // --- 1. CONFIGURATION FIREBASE ---
+      // REMPLACE AVEC TES CLES (Disponibles dans la console Firebase > Project Settings)
+      const firebaseConfig = {
+        apiKey: "AIzaSyBfNSc5ZoYEoy-JUsZDfi8Q571OCQMKqW0",
+        authDomain: "ovatek-597da.firebaseapp.com",
+        databaseURL: "https://ovatek-597da-default-rtdb.firebaseio.com",
+        projectId: "ovatek-597da",
+        storageBucket: "ovatek-597da.firebasestorage.app",
+        messagingSenderId: "551115318394",
+        appId: "1:551115318394:web:222752e43f4204c0e987c3",
+        measurementId: "G-WXC42Q4RTK",
+      };
+
+      // Initialisation
+      let app, db;
+      try {
+        app = initializeApp(firebaseConfig);
+        db = getDatabase(app);
+        updateConnectionStatus(true);
+      } catch (e) {
+        console.error("Erreur Firebase:", e);
+        updateConnectionStatus(false);
+      }
+
+      function updateConnectionStatus(connected) {
+        const dot = document.getElementById("firebase-status");
+        const txt = document.getElementById("status-text");
+        if (connected) {
+          dot.classList.remove("bg-red-500");
+          dot.classList.add("bg-green-500");
+          txt.innerText = "Connecté Firebase";
+        } else {
+          txt.innerText = "Erreur Config";
+        }
+      }
+
+      // --- 2. CONFIGURATION GRAPHIQUE (Chart.js) ---
+      const ctx = document.getElementById("historyChart").getContext("2d");
+      const historyChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: [], // Les heures seront ajoutées ici
+          datasets: [
+            {
+              label: "Température (°C)",
+              data: [],
+              borderColor: "rgb(239, 68, 68)", // Rouge
+              backgroundColor: "rgba(239, 68, 68, 0.1)",
+              borderWidth: 2,
+              tension: 0.4,
+              yAxisID: "y",
+              pointRadius: 1,
+            },
+            {
+              label: "Humidité (%)",
+              data: [],
+              borderColor: "rgb(59, 130, 246)", // Bleu
+              backgroundColor: "rgba(59, 130, 246, 0.1)",
+              borderWidth: 2,
+              tension: 0.4,
+              yAxisID: "y1",
+              pointRadius: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { position: "top" },
+          },
+          scales: {
+            x: { ticks: { maxTicksLimit: 10 } },
+            y: {
+              type: "linear",
+              display: true,
+              position: "left",
+              title: { display: true, text: "Température" },
+              suggestedMin: 35,
+              suggestedMax: 40,
+            },
+            y1: {
+              type: "linear",
+              display: true,
+              position: "right",
+              title: { display: true, text: "Humidité" },
+              grid: { drawOnChartArea: false },
+              suggestedMin: 40,
+              suggestedMax: 80,
+            },
+          },
+        },
+      });
+
+      // --- 3. ÉCOUTE DES DONNÉES TEMPS RÉEL (État Actuel) ---
+      // On écoute le dossier "/incubateur/current" pour les jauges
+      const currentRef = ref(db, "incubateur/current");
+      onValue(currentRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          updateDashboard(data);
+        }
+      });
+
+      // --- 4. GESTION DU GRAPHIQUE (Historique) ---
+      // On écoute le dossier "/incubateur/history" et on prend les 60 derniers
+      const historyRef = query(ref(db, "incubateur/history"), limitToLast(60));
+
+      onChildAdded(historyRef, (snapshot) => {
+        const log = snapshot.val();
+        if (log) {
+          addDataToChart(log.timestamp, log.temperature, log.humidite);
+        }
+      });
+
+      // Fonctions Utilitaires
+      function updateDashboard(data) {
+        // Température
+        document.getElementById("temp-val").innerText =
+          parseFloat(data.temperature).toFixed(1) + "°C";
+        const tempPercent = Math.min(
+          Math.max((data.temperature - 30) * 10, 0),
+          100
+        ); // Echelle visuelle 30-40°C
+        document.getElementById("temp-bar").style.width = tempPercent + "%";
+
+        // Humidité
+        document.getElementById("hum-val").innerText =
+          Math.round(data.humidite) + "%";
+        document.getElementById("hum-bar").style.width = data.humidite + "%";
+
+        // États
+        const heatBadge = document.getElementById("heat-status");
+        if (data.chauffage) {
+          heatBadge.innerText = "ON";
+          heatBadge.className =
+            "px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 pulse-red";
+        } else {
+          heatBadge.innerText = "OFF";
+          heatBadge.className =
+            "px-2 py-0.5 rounded text-xs font-bold bg-gray-100 text-gray-500";
+        }
+
+        document.getElementById("fan-status").innerText =
+          data.ventilation > 50 ? "BOOST (100%)" : "ECO (30%)";
+
+        // Alerte Surchauffe
+        const banner = document.getElementById("alert-banner");
+        if (data.temperature > 39.0) banner.classList.remove("hidden");
+        else banner.classList.add("hidden");
+      }
+
+      function addDataToChart(time, temp, hum) {
+        // Convertir timestamp ou string heure
+        let label = time;
+        // Si c'est un timestamp (nombre), on le convertit en HH:MM
+        if (typeof time === "number") {
+          const date = new Date(time);
+          label =
+            date.getHours().toString().padStart(2, "0") +
+            ":" +
+            date.getMinutes().toString().padStart(2, "0");
+        }
+
+        // Ajouter au graph
+        historyChart.data.labels.push(label);
+        historyChart.data.datasets[0].data.push(temp);
+        historyChart.data.datasets[1].data.push(hum);
+
+        // Garder seulement 60 points (fenêtre glissante)
+        if (historyChart.data.labels.length > 60) {
+          historyChart.data.labels.shift();
+          historyChart.data.datasets[0].data.shift();
+          historyChart.data.datasets[1].data.shift();
+        }
+
+        historyChart.update();
+      }
+
+      // --- CALCUL DATE ECLOSION (Bonus) ---
+      // Mise à jour : Date de début automatique à aujourd'hui pour la démo
+      const today = new Date();
+      const dateDebut = new Date(); // Commence aujourd'hui
+
+      // Pour fixer une date spécifique, décommente ci-dessous :
+      // const dateDebut = new Date('2023-12-01');
+
+      // On s'assure qu'il y a au moins 1ms de diff pour afficher Jour 1
+      const diffTime = Math.max(Math.abs(today - dateDebut), 1);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      document.getElementById("jour-val").innerText = "Jour " + diffDays;
+
+      const dateFin = new Date(dateDebut);
+      dateFin.setDate(dateFin.getDate() + 21);
+      document.getElementById("date-eclosion").innerText =
+        "Éclosion: " + dateFin.toLocaleDateString();
+    </script>
+  </body>
+</html>
